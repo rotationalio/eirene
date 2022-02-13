@@ -1,3 +1,4 @@
+import uuid
 import random
 
 from crdt.gcounter import GCounter
@@ -10,31 +11,32 @@ class TestGCounter():
     """
 
     def randomGCounter(self):
-        counter = GCounter()
+        counter = GCounter(id=uuid.uuid4())
         for i in range(random.randint(0, 100)):
             counter.add(random.randint(0, 100))
         return counter
 
     def test_counter(self):
         """
-        Test that the basic operations work.
+        Test that the basic operations work. This uses different IDs for the counters
+        to represent different nodes.
         """
-        a = GCounter()
+        a = GCounter(id=uuid.uuid4())
         a.add(1)
         a.add(2)
         a.add(3)
         assert a.get() == 6
 
-        b = GCounter()
+        b = GCounter(id=uuid.uuid4())
         b.add(4)
         assert b.get() == 4
 
-        c = GCounter()
+        c = GCounter(id=uuid.uuid4())
         c.add(10)
         assert c.get() == 10
 
-        assert a.merge(b).get() == 6
-        assert b.merge(c).get() == 10
+        assert a.merge(b).get() == 10
+        assert b.merge(c).get() == 14
 
 
     def test_associative(self):
