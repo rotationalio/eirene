@@ -35,9 +35,20 @@ class TestGCounter():
         c.add(10)
         assert c.get() == 10
 
-        assert a.merge(b).get() == 10
-        assert b.merge(c).get() == 14
+        # Before merging, a does not have b's counter
+        assert b.id not in a.counts
 
+        # After merging with b, a now has b's counter
+        assert a.merge(b).get() == 10
+        assert b.id in a.counts
+
+        # Before merging with c, b does not have a or c's counters
+        assert a.id not in b.counts
+        assert c.id not in b.counts
+
+        # After merging with c, b now has c's counter
+        assert b.merge(c).get() == 14
+        assert c.id in b.counts
 
     def test_associative(self):
         """
