@@ -10,7 +10,7 @@ class DistributedNotebook():
 
     def __init__(self, id=uuid.uuid4()):
         self.id = id
-        self.cells = Sequence(uuid.uuid4())
+        self.cells = Sequence(id)
     
     def append(self, cell):
         """
@@ -38,3 +38,9 @@ class DistributedNotebook():
             raise ValueError("Incompatible CRDT for merge(), expected DistributedNotebook")
         self.cells = self.cells.merge(other.cells)
         return self
+
+    def get(self):
+        """
+        Returns the current state of the notebook.
+        """
+        return self.cells.get()

@@ -9,9 +9,9 @@ class Cell():
 
     def __init__(self, id=uuid.uuid4()):
         self.id = id
-        self.lines = Sequence(uuid.uuid4())
+        self.lines = Sequence(id)
 
-    def append(self, line=""):
+    def append(self, line):
         """
         Appends a line to the end of a cell.
         """
@@ -68,7 +68,7 @@ class Cell():
 
     def get(self):
         """
-        Returns the cell as a string.
+        Returns all the lines in the cell.
         """
-        return "\n".join("".join(line.get()) for line in self.lines.get())
+        return [''.join(line.get()) for line in self.lines.get()]
             
