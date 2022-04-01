@@ -20,7 +20,7 @@ class TestSequence():
             if op == "append":
                 seq.append(random.choice(chars))
                 size += 1
-            elif op == "insert":
+            elif op == "insert" and size > 1:
                 index = random.randint(0, size-1)
                 seq.insert(index, random.choice(chars))
                 size += 1
