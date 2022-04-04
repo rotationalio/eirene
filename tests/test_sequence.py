@@ -1,5 +1,6 @@
 import random
 import uuid
+import pytest
 
 from crdt.sequence import Sequence
 
@@ -42,6 +43,15 @@ class TestSequence():
         a.insert(0, "a")
         assert a.get() == ["a", "b", "c"]
 
+        with pytest.raises(IndexError):
+            a.insert(-1, "d")
+            
+        with pytest.raises(IndexError):
+            a.insert(5, "d")
+
+        with pytest.raises(IndexError):
+            a.remove(4)
+
         a.remove(2)
         assert a.get() == ["a", "b"]
 
@@ -59,6 +69,9 @@ class TestSequence():
         assert a.get() == ["a"]
         a.remove(0)
         assert a.get() == []
+
+        with pytest.raises(IndexError):
+            a.remove(0)
 
     def test_merge(self):
         """
@@ -95,6 +108,22 @@ class TestSequence():
         c.insert(2, "1")
         assert c.get() == ["a", "b", "1", "c", "x", "y", "z"]
         assert d.merge(c).get() == ["a", "b", "1", "c", "x", "y", "z"]
+
+    def test_name_conflict(self):
+        """
+        Test that we raise an error when resolving conflicting operations between two identically-named sequences.
+        """
+        a = Sequence(id="alice")
+        a.append("a")
+
+        b = Sequence(id="alice")
+        b.append("b")
+
+        with pytest.raises(ValueError):
+            a.merge(b)
+
+        with pytest.raises(ValueError):
+            b.merge(a)
 
     def test_associative(self):
         """

@@ -1,5 +1,4 @@
 from functools import cmp_to_key
-from re import S
 import uuid
 from enum import Enum
 
@@ -20,7 +19,10 @@ class Sequence():
 
     def compare_operations(self, a, b):
         """
-        Compares this Operation to another Operation to determine ordering.
+        Compares two Operation objects to determine their ordering. This method
+        compares the operation IDs of two operations a,b and returns -1 if a < b,
+        0 if a == b, and 1 if a > b. This allows the method to be used as a custom
+        sorting function for the sorted() built-in function.
         """
         return a.owner.compare(b.owner)
 
@@ -28,27 +30,40 @@ class Sequence():
         """
         Returns the transformed index, which is the actual index of the object in the
         sequence, taking into account tombstones.
+
+        position: int
+        The 0-based index of insertion or removal not accounting for previously deleted
+        objects (tombstones). This represents the user's view of the sequence.
+        
+        Returns: int
+        The correct 0-based index for insertion or removal, taking into account
+        tombstones.
         """
-        if position < 0 or position >= len(self.sequence):
-            raise IndexError("Index out of bounds")
+
+        if position < 0:
+            raise IndexError("Provided index {} out of bounds".format(position))
 
         index = -1
         while position >= 0:
             index += 1
+            if index >= len(self.sequence):
+                raise IndexError("Provided index {} exceeds sequence with length {}".format(position, len(self.get())))
             if not self.sequence[index].tombstone:
                 position -= 1
         return index
 
     def append(self, object):
         """
-        Appends an item to the end of the sequence.
+        Appends an item to the end of the sequence. This is implemented by applying an
+        insert operation at the end of the operation log.
         """
         
         # Tick the clock
         self.clock.add(1)
+        owner = OpId(self.id, self.clock.get())
 
         # Add the insert operation to the log and update the sequence
-        op = Operation(OpId(self.id, self.clock.get()), OperationType.INSERT, None, payload=object)
+        op = Operation(owner=owner, action=OperationType.INSERT, payload=object)
         self.operations.add(op)
         op.do(self.sequence)
 
@@ -65,10 +80,10 @@ class Sequence():
 
         index = self.index_transform(position)
         target = self.sequence[index].operation
-        op_id = self.clock.get()
+        owner = OpId(self.id, self.clock.get())
 
         # Add the insert operation to the log and update the sequence
-        op = Operation(OpId(self.id, op_id), OperationType.INSERT, target, payload=object)
+        op = Operation(owner=owner, action=OperationType.INSERT, target=target, payload=object)
         self.operations.add(op)
         op.do(self.sequence)
 
@@ -82,10 +97,10 @@ class Sequence():
 
         index = self.index_transform(position)
         target = self.sequence[index].operation
-        op_id = self.clock.get()
+        owner = OpId(self.id, self.clock.get())
 
         # Add the remove operation to the log and update the sequence
-        op = Operation(OpId(self.id, op_id), OperationType.REMOVE, target)
+        op = Operation(owner=owner, action=OperationType.REMOVE, target=target)
         self.operations.add(op)
         op.do(self.sequence)
 
@@ -128,7 +143,7 @@ class Object():
         self.operation = operation
         self.tombstone = False
 
-    def print(self):
+    def __repr__(self):
         """
         Prints the object to stdout.
         """
@@ -136,11 +151,22 @@ class Object():
 
 class OpId():
     """
-    An OpId represents a unique identifier for an Operation.
+    An OpId represents a unique identifier for an Operation in a Sequence.
+    
+    node: str
+    The name of the node that created the Operation, which is used to resolve conflicts.
+    Usually this is a UUID which is assigned when the node is created, and is the same
+    for all Operations that the node creates.
+
+    id: int
+    The global ID of the Operation, which is used to determine a global ordering of
+    Operations. This should be unique across all Operations created by the node,
+    ensuring that each (node, ID) pair is also unique. Note that IDs are not unique
+    across nodes, but (node, ID) pairs are.
     """
 
-    def __init__(self, name, id):
-        self.name = name
+    def __init__(self, node, id):
+        self.node = node
         self.id = id
 
     def compare(self, other):
@@ -152,9 +178,9 @@ class OpId():
             # Conflicts are resolved arbitrarily by comparing the owner IDs
             # TODO: We could handle "forks" of the operation log and allow for multiple
             # histories to be valid.
-            if self.name < other.name:
+            if self.node < other.node:
                 return -1
-            elif self.name > other.name:
+            elif self.node > other.node:
                 return 1
             else:
                 return 0
@@ -163,18 +189,23 @@ class OpId():
         """
         Returns true if this OpId is earlier than the other OpId.
         """
-        return self.compare(other) < 0
+        cmp = self.compare(other)
+        if cmp == 0:
+            # In order to provide consistent ordering, OpIds need to be universally
+            # unique.
+            raise ValueError("Found conflicting Operations with the same OpId: ({}, {})".format(self.node, self.id))
+        return cmp < 0
 
     def __eq__(self, other):
         if not isinstance(other, OpId):
             return False
-        return self.name == other.name and self.id == other.id
+        return self.node == other.node and self.id == other.id
 
     def print(self):
         """
         Prints the OpId to stdout.
         """
-        return "name: {}, id: {}".format(self.name, self.id)
+        return "node: {}, id: {}".format(self.node, self.id)
 
 class OperationType(Enum):
     """
@@ -188,9 +219,23 @@ class Operation():
     An Operation represents a point-in-time change to a Sequence. Every Operation
     has a globally-unique ID and references a previous Operation, enabling an order of
     Operations to be imposed.
+
+    owner: OpId
+    The OpId of the node that created the Operation, which is used to determine
+    Operation ordering.
+
+    action: OperationType
+    The type of operation, either INSERT or REMOVE.
+
+    target: OpId
+    The target of the Operation, which is either a previous Operation or None if
+    inserting at the end of a Sequence.
+
+    payload: object
+    The payload of the Operation, which is the actual object to be inserted or removed.
     """
 
-    def __init__(self, owner, action, target, payload=None):
+    def __init__(self, owner=None, action=None, target=None, payload=None):
         if action not in OperationType:
             raise ValueError("Invalid operation type")
         self.owner = owner
@@ -203,14 +248,16 @@ class Operation():
         Applies this Operation to an ordered list of objects.
         """
         # Iterate through the sequence to find the index of the target object
-        stomp = False
         if self.target is None:
-            # Special case: Append at the end
+            # Special case: If appending at the end or to an empty sequence, there is
+            # no target object. Since there can be multiple of these operations from
+            # different nodes, we still need to preserve the operation ordering.
             index = len(objects)
             while index > 0:
                 op = objects[index-1].operation
                 if op.target is None and not self.owner.is_earlier(op.owner):
-                    # We found another operation older than us, so stop iteration.
+                    # We found another target=None operation older than us, so stop
+                    # iteration.
                     break
                 index -= 1
         else:
@@ -240,7 +287,7 @@ class Operation():
                 raise IndexError("Could not find object to remove")
             objects[index].tombstone = True
 
-    def print(self):
+    def __repr__(self):
         """
         Prints the Operation to stdout.
         """
