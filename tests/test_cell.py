@@ -1,5 +1,5 @@
 import random
-import uuid
+import pytest
 
 from notebook.cell import Cell
 from tests.fixtures import generate
@@ -16,79 +16,47 @@ class TestCell():
         Test that the single cell operations work.
         """
         a = Cell()
-        a.append("this is the first line")
-        a.append("this is the second line")
-        assert a.get() == ["this is the first line", "this is the second line"]
+        a.append_text("this is the first line")
+        a.append_text("\nthis is the second line")
+        assert a.get_text() == "this is the first line\nthis is the second line"
 
-        a.remove(1)
-        assert a.get() == ["this is the first line"]
+        a.remove_many(0, 5)
+        assert a.get_text() == "is the first line\nthis is the second line"
 
-        a.insert_chars(0, 11, " edited")
-        assert a.get() == ["this is the edited first line"]
+        a.insert_text(7, "edited ")
+        assert a.get_text() == "is the edited first line\nthis is the second line"
 
-        a.insert(0, "this is an inserted line")
-        assert a.get() == ["this is an inserted line", "this is the edited first line"]
-
-        a.append_chars(1, " -- append to the second line")
-        assert a.get() == ["this is an inserted line", "this is the edited first line -- append to the second line"]
-
-        a.remove_chars(0, 5, 3)
-        assert a.get() == ["this an inserted line", "this is the edited first line -- append to the second line"]
-
-    def test_merge(self):
-        """
-        Test that merging cells works.
-        """
-        a = Cell(id="alice")
-        a.append("Alice line 1")
-        a.append("Alice line 2")
-        
-        b = Cell(id="bob")
-        b.append("Bob line 1")
-        b.append("Bob line 2")
-
-        assert a.merge(b).get() == ["Alice line 1", "Bob line 1", "Alice line 2", "Bob line 2"]
-        assert b.merge(a).get() == ["Alice line 1", "Bob line 1", "Alice line 2", "Bob line 2"]
-
-        c = Cell(id="carol")
-        c.append("Carol initial line")
-        c.insert(0, "Carol insert before line 1")
-        c.insert(1, "Carol insert before line 2")
-        assert c.get() == ["Carol insert before line 1", "Carol insert before line 2", "Carol initial line"]
-
-        d = Cell(id="dave")
-        d.append("Dave initial line")
-        d.append("Dave second line")
-        d.append_chars(1, " -- Dave append to second line")
-        d.insert(0, "Dave insert before line 1")
-        d.insert(1, "Dave insert before line 2")
-        d.remove(1)
-        assert d.get() == ["Dave insert before line 1", "Dave initial line", "Dave second line -- Dave append to second line"]
-        
-        merged = [
-            "Carol insert before line 1",
-            "Carol insert before line 2",
-            "Carol initial line",
-            "Dave insert before line 1",
-            "Dave initial line",
-            "Dave second line -- Dave append to second line",
+    @pytest.mark.parametrize(
+        "before,after",
+        [
+            ("", "abc"),
+            ("abc", "ab"),
+            ("ab", "def"),
+            ("def", "a\nb\nc"),
+            ("a\nb\nc", "a\nx\ny"),
+            ("abc", "ab\n"),
         ]
-        assert c.merge(d).get() == merged
-        assert d.merge(c).get() == merged
+    )
+    def test_update(self, before, after):
+        """
+        Test updating a cell with new text content.
+        """
+        a = Cell()
+        a.append_text(before)
+        a.update(after)
+        assert a.get_text() == after
 
-        c.insert(5, "Carol insert before line 6")
-        c.remove_chars(6, 20, 5)
-        after_insert = [
-            "Carol insert before line 1",
-            "Carol insert before line 2",
-            "Carol initial line",
-            "Dave insert before line 1",
-            "Dave initial line",
-            "Carol insert before line 6",
-            "Dave second line -- append to second line",
-        ]
-        assert c.get() == after_insert
-        assert d.merge(c).get() == after_insert
+    def test_update_random(self):
+        """
+        Test updating a cell with random text data.
+        """
+        random.seed(SEED)
+        a = Cell()
+        charset = "abcdefghijklmnopqrstuvwxyz \n"
+        for i in range(100):
+            text = generate.random_word(charset=charset)
+            a.update(text)
+            assert a.get_text() == text
 
     def test_associative(self):
         """

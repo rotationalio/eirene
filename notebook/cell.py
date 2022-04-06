@@ -1,74 +1,49 @@
-import uuid
+import difflib
 
 from crdt.sequence import Sequence
 
-class Cell():
+class Cell(Sequence):
     """
     Cell represents the contents of a cell in a DistributedNotebook.
     """
 
-    def __init__(self, id=uuid.uuid4()):
-        self.id = id
-        self.lines = Sequence(id)
+    def append_text(self, text):
+        """
+        Appends the given text to the end of the cell.
+        """
+        self.append_many(list(text))
 
-    def append(self, line):
+    def insert_text(self, index, text):
         """
-        Appends a line to the end of a cell.
+        Inserts the given text at the given index.
         """
-        seq = Sequence(uuid.uuid4())
-        for ch in line:
-            seq.append(ch)
-        self.lines.append(seq)
-    
-    def insert(self, index, line):
-        """
-        Inserts a line at the specified index.
-        """
-        seq = Sequence(uuid.uuid4())
-        for ch in line:
-            seq.append(ch)
-        self.lines.insert(index, seq)
+        self.insert_many(index, list(text))
 
-    def remove(self, index):
+    def update(self, text):
         """
-        Removes a line at the specified index.
+        Updates the text in the cell with the given text. Internally, this method
+        calculates the diff between the current text in the cell and the new text and 
+        decomposes the diff into a set of operations which are sequentially applied to
+        the cell.
         """
-        self.lines.remove(index)
+        changes = difflib.ndiff(self.get_text(), text)
+        offset = 0
+        for i, s in enumerate(changes):
+            char_index = i + offset
+            if s[0] == '-':
+                self.remove(char_index)
+                # difflib positions are relative to the original text, so account for
+                # the removed character
+                offset -= 1
+            elif s[0] == '+':
+                if char_index >= len(self.get()):
+                    self.append(s[-1])
+                else:
+                    self.insert(char_index, s[-1])
 
-    def append_chars(self, line_num, chars):
+    def get_text(self):
         """
-        Appends a set of characters to the specified line.
+        Returns the text in the cell.
         """
-        for ch in chars:
-            self.lines.get()[line_num].append(ch)
-
-    def insert_chars(self, line_num, char_num, chars):
-        """
-        Inserts a set of characters at the specified line.
-        """
-        for ch in chars:
-            self.lines.get()[line_num].insert(char_num, ch)
-            char_num += 1
-
-    def remove_chars(self, line_num, char_num, num_chars):
-        """
-        Removes a set of character from the specified line.
-        """
-        for i in range(num_chars):
-            self.lines.get()[line_num].remove(char_num)
-
-    def merge(self, other):
-        """
-        Merges another Cell with this one.
-        """
-        if not isinstance(other, Cell):
-            raise ValueError("Incompatible CRDT for merge(), expected Cell")
-        self.lines = self.lines.merge(other.lines)
-        return self
-
-    def get(self):
-        """
-        Returns all the lines in the cell.
-        """
-        return [''.join(line.get()) for line in self.lines.get()]
+        return ''.join(self.get())
             

@@ -52,7 +52,7 @@ class Sequence():
                 position -= 1
         return index
 
-    def append(self, object):
+    def append(self, item):
         """
         Appends an item to the end of the sequence. This is implemented by applying an
         insert operation at the end of the operation log.
@@ -63,11 +63,18 @@ class Sequence():
         owner = OpId(self.id, self.clock.get())
 
         # Add the insert operation to the log and update the sequence
-        op = Operation(owner=owner, action=OperationType.INSERT, payload=object)
+        op = Operation(owner=owner, action=OperationType.INSERT, payload=item)
         self.operations.add(op)
         op.do(self.sequence)
 
-    def insert(self, position, object):
+    def append_many(self, items):
+        """
+        Appends an iterable of items to the end of the sequence.
+        """
+        for item in items:
+            self.append(item)
+
+    def insert(self, position, item):
         """
         Inserts an item to the sequence at the specified position. The position is a
         0-based index from the perspective of the caller (e.g., does not count deleted
@@ -83,9 +90,17 @@ class Sequence():
         owner = OpId(self.id, self.clock.get())
 
         # Add the insert operation to the log and update the sequence
-        op = Operation(owner=owner, action=OperationType.INSERT, target=target, payload=object)
+        op = Operation(owner=owner, action=OperationType.INSERT, target=target, payload=item)
         self.operations.add(op)
         op.do(self.sequence)
+
+    def insert_many(self, position, items):
+        """
+        Inserts an iterable of objects at the specified position.
+        """
+        for item in items:
+            self.insert(position, item)
+            position += 1
 
     def remove(self, position):
         """
@@ -103,6 +118,13 @@ class Sequence():
         op = Operation(owner=owner, action=OperationType.REMOVE, target=target)
         self.operations.add(op)
         op.do(self.sequence)
+
+    def remove_many(self, position, count):
+        """
+        Removes a number of items from the sequence at the specified position.
+        """
+        for i in range(count):
+            self.remove(position)
 
     def merge(self, other):
         """

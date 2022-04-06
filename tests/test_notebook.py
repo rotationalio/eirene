@@ -1,5 +1,4 @@
 import random
-import uuid
 
 from notebook.cell import Cell
 from notebook.notebook import DistributedNotebook
@@ -19,18 +18,16 @@ class TestDistributedNotebook():
         """
         book = DistributedNotebook()
         a = Cell(id="alice")
-        a.append("Alice first line")
-        a.append("Alice second line")
+        a.append_text("Alice first line\nAlice second line")
         book.append(a)
 
         b = Cell(id="bob")
-        b.append("Bob first line")
-        b.append("Bob second line")
+        b.append_text("Bob first line\nBob second line")
         book.append(b)
         assert book.get() == [a, b]
 
         c = Cell(id="carol")
-        c.append("Carol first line")
+        c.append_text("Carol first line")
         book.insert(1, c)
         assert book.get() == [a, c, b]
 
@@ -43,21 +40,21 @@ class TestDistributedNotebook():
         """
         book1 = DistributedNotebook(id="book_1")
         a = Cell(id="alice")
-        a.append("Alice line 1")
+        a.append_text("Alice line 1")
         book1.append(a)
 
         b = Cell(id="bob")
-        b.append("Bob line 1")
+        b.append_text("Bob line 1")
         book1.append(b)
         assert book1.get() == [a, b]
 
         book2 = DistributedNotebook(id="book_2")
         c = Cell(id="carol")
-        c.append("Carol line 1")
+        c.append_text("Carol line 1")
         book2.append(c)
 
         d = Cell(id="dave")
-        d.append("Dave line 1")
+        d.append_text("Dave line 1")
         book2.append(d)
         assert book2.get() == [c, d]
 
