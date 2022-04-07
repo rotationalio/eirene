@@ -11,7 +11,7 @@ class TestSequence():
     Tests for the Sequence CRDT.
     """
 
-    def randomSequence(self):
+    def random_sequence(self):
         seq = Sequence(id=uuid.uuid4())
         chars = "abcdefghijklmnopqrstuvwxyz"
         seq.append(random.choice(chars))
@@ -131,9 +131,9 @@ class TestSequence():
         """
         random.seed(SEED)
         for i in range(100):
-            a = self.randomSequence()
-            b = self.randomSequence()
-            c = self.randomSequence()
+            a = self.random_sequence()
+            b = self.random_sequence()
+            c = self.random_sequence()
             left = a.merge(b.merge(c))
             right = c.merge(a.merge(b))
             assert left.get() == right.get()
@@ -144,8 +144,8 @@ class TestSequence():
         """
         random.seed(SEED)
         for i in range(100):
-            a = self.randomSequence()
-            b = self.randomSequence()
+            a = self.random_sequence()
+            b = self.random_sequence()
             left = a.merge(b)
             right = b.merge(a)
             assert left.get() == right.get()
@@ -156,5 +156,5 @@ class TestSequence():
         """
         random.seed(SEED)
         for i in range(100):
-            a = self.randomSequence()
+            a = self.random_sequence()
             assert a.get() == a.merge(a).get()

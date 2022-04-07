@@ -1,46 +1,33 @@
 import uuid
 
 from crdt.sequence import Sequence
+from notebook.cell import Cell
 
-class DistributedNotebook():
+class DistributedNotebook(Sequence):
     """
     DistributedNotebook is a notebook designed for asynchronous collaboration. It
     consists of CRDT data structures which enable consistent merges between replicas.
     """
 
-    def __init__(self, id=uuid.uuid4()):
-        self.id = id
-        self.cells = Sequence(id)
-    
-    def append(self, cell):
+    def create_cell(self, index=None):
         """
-        Appends a cell to the end of the notebook.
+        Creates a new cell at the given index. If the index is not specified, the cell
+        is appended to the end of the notebook.
         """
-        self.cells.append(cell)
+        cell = Cell(id=uuid.uuid4())
+        if index is None:
+            self.append(cell)
+        else:
+            self.insert(index, cell)
 
-    def insert(self, index, cell):
+    def update_cell(self, index, text):
         """
-        Inserts a cell at the specified index.
+        Updates the text in a cell with new text.
         """
-        self.cells.insert(index, cell)
+        self.get()[index].update(text)
 
-    def remove(self, index):
+    def remove_cell(self, index):
         """
-        Removes a cell at the specified index.
+        Removes the cell at the given index.
         """
-        self.cells.remove(index)
-
-    def merge(self, other):
-        """
-        Merges another DistributedNotebook with this one.
-        """
-        if not isinstance(other, DistributedNotebook):
-            raise ValueError("Incompatible CRDT for merge(), expected DistributedNotebook")
-        self.cells = self.cells.merge(other.cells)
-        return self
-
-    def get(self):
-        """
-        Returns the current state of the notebook.
-        """
-        return self.cells.get()
+        self.remove(index)
