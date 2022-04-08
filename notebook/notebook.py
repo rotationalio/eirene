@@ -14,7 +14,7 @@ class DistributedNotebook(Sequence):
         Creates a new cell at the given index. If the index is not specified, the cell
         is appended to the end of the notebook.
         """
-        cell = Cell(id=uuid.uuid4())
+        cell = Cell(id=self.id)
         if index is None:
             self.append(cell)
         else:
@@ -31,3 +31,9 @@ class DistributedNotebook(Sequence):
         Removes the cell at the given index.
         """
         self.remove(index)
+
+    def get_cell_data(self):
+        """
+        Returns all the cell data in the notebook.
+        """
+        return [cell.get_text() for cell in self.get()]

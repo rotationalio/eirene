@@ -109,22 +109,6 @@ class TestSequence():
         assert c.get() == ["a", "b", "1", "c", "x", "y", "z"]
         assert d.merge(c).get() == ["a", "b", "1", "c", "x", "y", "z"]
 
-    def test_name_conflict(self):
-        """
-        Test that we raise an error when resolving conflicting operations between two identically-named sequences.
-        """
-        a = Sequence(id="alice")
-        a.append("a")
-
-        b = Sequence(id="alice")
-        b.append("b")
-
-        with pytest.raises(ValueError):
-            a.merge(b)
-
-        with pytest.raises(ValueError):
-            b.merge(a)
-
     def test_associative(self):
         """
         Tests that the associative property holds -> A + (B + C) == (A + B) + C.

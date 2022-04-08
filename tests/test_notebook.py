@@ -38,27 +38,23 @@ class TestDistributedNotebook():
         """
         Test that merging notebooks works.
         """
-        book1 = DistributedNotebook(id="book_1")
+        book1 = DistributedNotebook(id="alice")
         a = Cell(id="alice")
-        a.append_text("Alice line 1")
+        a.append_text("Alice cell 1 line 1")
         book1.append(a)
+        assert book1.get() == [a]
 
-        b = Cell(id="bob")
-        b.append_text("Bob line 1")
-        book1.append(b)
-        assert book1.get() == [a, b]
-
-        book2 = DistributedNotebook(id="book_2")
-        c = Cell(id="carol")
-        c.append_text("Carol line 1")
+        book2 = DistributedNotebook(id="bob")
+        c = Cell(id="bob")
+        c.append_text("Bob cell 1 line 1")
         book2.append(c)
+        assert book2.get() == [c]
 
-        d = Cell(id="dave")
-        d.append_text("Dave line 1")
-        book2.append(d)
-        assert book2.get() == [c, d]
+        assert book1.merge(book2).get() == [a, c]
 
-        assert book1.merge(book2).get() == [a, c, b, d]
+        book1.update_cell(0, "Alice edited")
+        book2.update_cell(0, "Bob edited")
+        assert book1.merge(book2).get() == book2.merge(book1).get()
 
     def test_associative(self):
         """
