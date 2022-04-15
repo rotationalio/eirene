@@ -14,14 +14,23 @@ class NotebookClient():
     collaboration.
     """
 
-    def __init__(self, port, peers, name="alice"):
+    def __init__(self, port, peers, name="alice", hostname="localhost"):
         self.port = int(port)
         self.peers = {}
         for peer in peers:
-            peer_name, peer_port = peer.split(":")
-            self.peers[peer_name] = peer_port
+            peer_parts = peer.split(":")
+            if len(peer_parts) == 2:
+                self.peers[peer_parts[0]] = ("localhost", int(peer_parts[1]))
+            elif len(peer_parts) == 3:
+                self.peers[peer_parts[0]] = (peer_parts[1], int(peer_parts[2]))
+            else:
+                raise ValueError("Invalid peer format: {}".format(peer))
         self.name = name
-        self.notebook = DistributedNotebook(id=port)
+        self.hostname = hostname
+        self.notebook = DistributedNotebook(id=name+":"+str(port))
+        # The client listens and responds to sync messages on another thread.
+        # Therefore, notebook accesses are critical sections and must be protected by a
+        # lock to prevent concurrent access.
         self.lock = threading.Lock()
         self.editor = None
 
@@ -71,7 +80,7 @@ class NotebookClient():
         Listens for sync messages from remote peers.
         """
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-            s.bind(('localhost', port))
+            s.bind((self.hostname, port))
             s.listen()
             print("Listening on port {}".format(port))
             while True:
@@ -92,9 +101,8 @@ class NotebookClient():
         """
         Sends a sync message to a remote peer.
         """
-        remote_port = int(self.peers[peer])
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-            s.connect(('localhost', remote_port))
+            s.connect(self.peers[peer])
 
             with self.lock:
                 self.send_bytes(s, pickle.dumps(self.notebook))

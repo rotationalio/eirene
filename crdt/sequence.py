@@ -141,7 +141,8 @@ class Sequence():
         # each of the sub-sequences.
         this_sequence = self.get()
         other_sequence = other.get()
-        assert len(this_sequence) == len(other_sequence)
+        if len(this_sequence) != len(other_sequence):
+            raise Exception("Merge produced Sequences of different lengths: {} and {}".format(len(this_sequence), len(other_sequence)))
         for i in range(len(this_sequence)):
             if isinstance(this_sequence[i], Sequence) and isinstance(other_sequence[i], Sequence):
                 this_sequence[i].merge(other_sequence[i])
