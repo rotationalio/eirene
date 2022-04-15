@@ -132,7 +132,29 @@ class Sequence():
         """
         if not isinstance(other, Sequence):
             raise ValueError("Incompatible CRDT for merge(), expected Sequence")
-        
+
+        # Merge the two operation logs
+        self.merge_operations(other)
+        other.merge_operations(self)
+
+        # If we are merging two sequences of sequences, we need to recursively merge
+        # each of the sub-sequences.
+        this_sequence = self.get()
+        other_sequence = other.get()
+        if len(this_sequence) != len(other_sequence):
+            raise Exception("Merge produced Sequences of different lengths: {} and {}".format(len(this_sequence), len(other_sequence)))
+        for i in range(len(this_sequence)):
+            if isinstance(this_sequence[i], Sequence) and isinstance(other_sequence[i], Sequence):
+                this_sequence[i].merge(other_sequence[i])
+                this_sequence[i].id = self.id
+
+        return self
+
+    def merge_operations(self, other):
+        """
+        Merge the operation log of another Sequence with this one.
+        """
+
         # Sync the local clock with the remote clock
         self.clock = self.clock.merge(other.clock)
 
@@ -142,17 +164,22 @@ class Sequence():
         # Get a sorted view of the patches to apply
         patch_log = sorted(patch_ops, key=cmp_to_key(self.compare_operations))
 
-        # Path the sequence using the new operations
+        # Patch the sequence using the new operations
         for op in patch_log:
             op.do(self.sequence)
 
         # Merge the two operation logs
         self.operations = self.operations.merge(other.operations)
-        return self
+
+    def get_objects(self):
+        """
+        Returns the sorted list of objects that are not tombstones.
+        """
+        return [obj for obj in self.sequence if not obj.tombstone]
 
     def get(self):
         """
-        Returns the sorted list of payloads in the sequence.
+        Returns the sorted list of payloads in the sequence that are not tombstones.
         """
         return [obj.operation.payload for obj in self.sequence if not obj.tombstone]
 
@@ -217,13 +244,19 @@ class OpId():
             # unique.
             raise ValueError("Found conflicting Operations with the same OpId: ({}, {})".format(self.node, self.id))
         return cmp < 0
+    
+    def get_hash(self):
+        """
+        Returns a hash of the OpId.
+        """
+        return hash((self.node, self.id))
 
     def __eq__(self, other):
         if not isinstance(other, OpId):
             return False
         return self.node == other.node and self.id == other.id
 
-    def print(self):
+    def __repr__(self):
         """
         Prints the OpId to stdout.
         """
@@ -249,7 +282,7 @@ class Operation():
     action: OperationType
     The type of operation, either INSERT or REMOVE.
 
-    target: OpId
+    target: Operation
     The target of the Operation, which is either a previous Operation or None if
     inserting at the end of a Sequence.
 
@@ -309,8 +342,16 @@ class Operation():
                 raise IndexError("Could not find object to remove")
             objects[index].tombstone = True
 
+    def __eq__(self, other):
+        if not isinstance(other, Operation):
+            return False
+        return self.owner == other.owner
+
+    def __hash__(self):
+        return hash(self.owner.get_hash())
+
     def __repr__(self):
         """
         Prints the Operation to stdout.
         """
-        print("owner: {}, action: {}, target: {}, payload: {}".format(self.owner.print(), self.action, self.target, self.payload))
+        return "owner: {}, action: {}, target: {}, payload: {}".format(self.owner, self.action, self.target if self.target else None, self.payload)
