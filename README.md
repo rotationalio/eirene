@@ -17,7 +17,7 @@ In its present state eirene is built to run using Python 3 and only requires the
 ## Starting a client
 From the root of the project, enter the following:
 
-```python
+```bash
 python cli/main.py --name [NAME] --listen [PORT]
 ```
 
@@ -26,13 +26,13 @@ This will start a new client with the name `NAME` and start listening on the por
 ## Staring multiple clients
 Clients can be started from other shell windows using the same command. Although by default clients will listen for connections, they will not know how to send sync requests to each other by default. This information is provided with the `--peers [NAME:PORT ...]` argument. This identifies a list of peers that the client should know how to talk to. For example, the following commands instantiate an `alice` and `bob` client who each know how to communicate with each other.
 
-```python
+```bash
 python cli/main.py --name alice --listen 55101 --peers bob:55102
 python cli/main.py --name bob --listen 55102 --peers alice:55101
 ```
 
 Multiple peers can be specified with a space-separated list, like so:
-```python
+```bash
 python cli/main.py --name alice --listen 55101 --peers bob:55102 charlie:55103
 ```
 
