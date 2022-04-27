@@ -99,7 +99,6 @@ class NotebookClient():
         """
         Sends a sync message to a remote peer.
         """
-        print("Sending sync message to {}".format(peer))
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
             s.connect(self.peers[peer])
 
