@@ -4,6 +4,7 @@ from enum import Enum
 
 from crdt.gset import GSet
 from crdt.gcounter import GCounter
+from crdt.tree import ObjectTree
 
 class Sequence():
     """
@@ -15,7 +16,7 @@ class Sequence():
         self.id = id
         self.operations = GSet()
         self.clock = GCounter(self.id)
-        self.sequence = []
+        self.sequence = ObjectTree()
 
     def compare_operations(self, a, b):
         """
@@ -26,32 +27,6 @@ class Sequence():
         """
         return a.owner.compare(b.owner)
 
-    def index_transform(self, position):
-        """
-        Returns the transformed index, which is the actual index of the object in the
-        sequence, taking into account tombstones.
-
-        position: int
-        The 0-based index of insertion or removal not accounting for previously deleted
-        objects (tombstones). This represents the user's view of the sequence.
-        
-        Returns: int
-        The correct 0-based index for insertion or removal, taking into account
-        tombstones.
-        """
-
-        if position < 0:
-            raise IndexError("Provided index {} out of bounds".format(position))
-
-        index = -1
-        while position >= 0:
-            index += 1
-            if index >= len(self.sequence):
-                raise IndexError("Provided index {} exceeds sequence with length {}".format(position, len(self.get())))
-            if not self.sequence[index].tombstone:
-                position -= 1
-        return index
-
     def append(self, item):
         """
         Appends an item to the end of the sequence. This is implemented by applying an
@@ -60,10 +35,24 @@ class Sequence():
         
         # Tick the clock
         self.clock.add(1)
-        owner = OpId(self.id, self.clock.get())
+
+        objects = self.get_objects()
+        if len(self.get()) == 0:
+            # Special case: there is no operation to reference
+            target = None
+            action = OperationType.INSERT_BEFORE
+        elif len(objects) == 0:
+            # Special case: no visible objects to reference
+            target = self.sequence[0].operation
+            action = OperationType.INSERT_BEFORE
+        else:
+            # Insert after the last object in the sequence
+            target = objects[-1].operation
+            action = OperationType.INSERT_AFTER
 
         # Add the insert operation to the log and update the sequence
-        op = Operation(owner=owner, action=OperationType.INSERT, payload=item)
+        owner = OpId(self.id, self.clock.get())
+        op = Operation(owner=owner, action=action, target=target, payload=item)
         self.operations.add(op)
         op.do(self.sequence)
 
@@ -73,6 +62,16 @@ class Sequence():
         """
         for item in items:
             self.append(item)
+
+    def object_at_position(self, position):
+        """
+        Returns the object at the specified position. The given position is from the
+        perspective of the caller (e.g., does not count deleted objects).
+        """
+        objects = self.get_objects()
+        if position < 0 or position >= len(objects):
+            raise IndexError("Position {} out of range of sequence with length {}".format(position, len(objects)))
+        return objects[position]
 
     def insert(self, position, item):
         """
@@ -85,12 +84,11 @@ class Sequence():
         # Tick the clock
         self.clock.add(1)
 
-        index = self.index_transform(position)
-        target = self.sequence[index].operation
+        target = self.object_at_position(position).operation
         owner = OpId(self.id, self.clock.get())
 
         # Add the insert operation to the log and update the sequence
-        op = Operation(owner=owner, action=OperationType.INSERT, target=target, payload=item)
+        op = Operation(owner=owner, action=OperationType.INSERT_BEFORE, target=target, payload=item)
         self.operations.add(op)
         op.do(self.sequence)
 
@@ -104,14 +102,13 @@ class Sequence():
 
     def remove(self, position):
         """
-        Removes an item from the set at the specified position. The position must be
-        within bounds of the current sequence, or this raises an IndexError.
+        Removes an item from the set at the specified position. This raises an
+        IndexError if the position is out of bounds of the current sequence.
         """
         # Tick the clock
         self.clock.add(1)
 
-        index = self.index_transform(position)
-        target = self.sequence[index].operation
+        target = self.object_at_position(position).operation
         owner = OpId(self.id, self.clock.get())
 
         # Add the remove operation to the log and update the sequence
@@ -141,8 +138,6 @@ class Sequence():
         # each of the sub-sequences.
         this_sequence = self.get()
         other_sequence = other.get()
-        if len(this_sequence) != len(other_sequence):
-            raise Exception("Merge produced Sequences of different lengths: {} and {}".format(len(this_sequence), len(other_sequence)))
         for i in range(len(this_sequence)):
             if isinstance(this_sequence[i], Sequence) and isinstance(other_sequence[i], Sequence):
                 this_sequence[i].merge(other_sequence[i])
@@ -196,7 +191,7 @@ class Object():
         """
         Prints the object to stdout.
         """
-        print("owner: {}, payload: {}, tombstone: {}".format(self.operation.owner.print(), self.operation.payload, self.tombstone))
+        return "owner: {}, payload: {}, tombstone: {}".format(self.operation.owner, self.operation.payload, self.tombstone)
 
 class OpId():
     """
@@ -256,6 +251,11 @@ class OpId():
             return False
         return self.node == other.node and self.id == other.id
 
+    def __lt__(self, other):
+        if not isinstance(other, OpId):
+            return False
+        return self.is_earlier(other)
+
     def __repr__(self):
         """
         Prints the OpId to stdout.
@@ -266,8 +266,9 @@ class OperationType(Enum):
     """
     Enum for operations.
     """
-    INSERT = 0
-    REMOVE = 1
+    INSERT_BEFORE = 0
+    INSERT_AFTER = 1
+    REMOVE = 2
 
 class Operation():
     """
@@ -302,50 +303,32 @@ class Operation():
         """
         Applies this Operation to an ordered list of objects.
         """
-        # Iterate through the sequence to find the index of the target object
-        if self.target is None:
-            # Special case: If appending at the end or to an empty sequence, there is
-            # no target object. Since there can be multiple of these operations from
-            # different nodes, we still need to preserve the operation ordering.
-            index = len(objects)
-            while index > 0:
-                op = objects[index-1].operation
-                if op.target is None and not self.owner.is_earlier(op.owner):
-                    # We found another target=None operation older than us, so stop
-                    # iteration.
-                    break
-                index -= 1
-        else:
-            # Normal case: Find the object to insert before
-            index = 0
-            while index < len(objects):
-                op = objects[index].operation
-                if op.target == self.target and self.owner.is_earlier(op.owner):
-                    # We found another operation older than us, so stop iteration.
-                    break
-                elif op == self.target:
-                    # We found the target index
-                    break
-                index += 1
-
-        # Perform the operation at the index
-        if self.action == OperationType.INSERT:
-            obj = Object(self)
-            if index < len(objects):
-                objects.insert(index, obj)
-            else:
-                objects.append(obj)
+        obj = Object(self)
+        if self.action == OperationType.INSERT_BEFORE:
+            objects.insert(self.target, obj, before=True)
+        elif self.action == OperationType.INSERT_AFTER:
+            objects.insert(self.target, obj, before=False)
         elif self.action == OperationType.REMOVE:
-            # We need to keep the object around so that future operations can reference
-            # it, so we mark it as deleted
-            if index == len(objects):
-                raise IndexError("Could not find object to remove")
-            objects[index].tombstone = True
+            for obj in objects:
+                if obj.operation == self.target:
+                    obj.tombstone = True
+                    break
+        else:
+            raise ValueError("Invalid operation type")
+
+        print("Applied operation: {}".format(self))
+
+        print("Resulting sequence: {}".format([obj.operation.payload for obj in objects if not obj.tombstone]))
 
     def __eq__(self, other):
         if not isinstance(other, Operation):
             return False
         return self.owner == other.owner
+
+    def __lt__(self, other):
+        if not isinstance(other, Operation):
+            return False
+        return self.owner < other.owner
 
     def __hash__(self):
         return hash(self.owner.get_hash())
@@ -354,4 +337,8 @@ class Operation():
         """
         Prints the Operation to stdout.
         """
-        return "owner: {}, action: {}, target: {}, payload: {}".format(self.owner, self.action, self.target if self.target else None, self.payload)
+        if isinstance(self.target, Operation):
+            target = self.target.owner
+        else:
+            target = self.target
+        return "owner: {}, action: {}, target: {}, payload: {}".format(self.owner, self.action, target, self.payload)

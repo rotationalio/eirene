@@ -1,10 +1,10 @@
 import tkinter as tk
 
 class NotebookEditor():
-    '''
+    """
     NotebookEditor defines the UI for a simple notebook editor using tkinter. It
     optionally takes a DistributedNotebook object as input to synchronize with.
-    '''
+    """
     def __init__(self, client=None):
         self.root = tk.Tk()
         self.root.title(client.name if client is not None else "Untitled Notebook")
@@ -12,7 +12,7 @@ class NotebookEditor():
         self.cells = []
         if self.client is not None:
             for peer in self.client.get_peers():
-                tk.Button(self.root, text="sync with {}".format(peer), command=lambda: self.sync(peer)).pack(side="top")
+                tk.Button(self.root, text="sync with {}".format(peer), command=lambda p=peer: self.sync(p)).pack(side="top")
             self.client.attach_editor(self)
 
     def add_cell(self, after=None):
@@ -71,9 +71,9 @@ class NotebookEditor():
         self.render()
 
     def render(self):
-        '''
+        """
         Refresh the UI to reflect the current state of the notebook.
-        '''
+        """
         if self.client is not None:
             # Delete the current cells
             for cell in self.cells:
@@ -93,8 +93,8 @@ class NotebookEditor():
                 cell.pack(side="top", fill="both", expand=True)
 
     def start(self):
-        '''
+        """
         Start the UI. Note that this method blocks until the UI is closed.
-        '''
+        """
         self.add_cell()
         self.root.mainloop()

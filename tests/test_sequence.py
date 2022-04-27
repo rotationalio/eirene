@@ -79,10 +79,10 @@ class TestSequence():
         """
         a = Sequence(id="alice")
         a.append("a")
-        a.append("c")
+        a.append("b")
         
         b = Sequence(id="bob")
-        b.append("b")
+        b.append("c")
         b.append("d")
 
         assert a.merge(b).get() == ["a", "b", "c", "d"]
@@ -108,6 +108,31 @@ class TestSequence():
         c.insert(2, "1")
         assert c.get() == ["a", "b", "1", "c", "x", "y", "z"]
         assert d.merge(c).get() == ["a", "b", "1", "c", "x", "y", "z"]
+
+    @pytest.mark.skip(reason="what exactly breaks the logic here?")
+    def test_merge_newlines(self):
+        """
+        FIXME: This test fails, need to narrow it down a bit more.
+        """
+        a = Sequence(id="alice")
+        a.append("a")
+        a.append("b")
+        
+        b = Sequence(id="bob")
+        b.append("c")
+        b.append("d")
+
+        assert a.merge(b).get() == ["a", "b", "c", "d"]
+        assert b.merge(a).get() == ["a", "b", "c", "d"]
+
+        a.append_many(["\n", "x", "\n", "\n", "y"])
+        assert a.get() == ["a", "b", "c", "d", "\n", "x", "\n", "\n", "y"]
+
+        b.append_many(["\n", "1", "\n", "\n", "2"])
+        assert b.get() == ["a", "b", "c", "d", "\n", "1", "\n", "\n", "2"]
+
+        assert a.merge(b).get() == ["a", "b", "c", "d", "\n", "x", "\n", "\n", "y", "\n", "1", "\n", "\n", "2"]
+        assert b.merge(a).get() == ["a", "b", "c", "d", "\n", "a", "\n", "\n", "b", "\n", "1", "\n", "\n", "2"]
 
     def test_associative(self):
         """

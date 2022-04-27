@@ -2,8 +2,6 @@ import pickle
 import socket
 import threading
 
-from numpy import full
-
 from notebook.notebook import DistributedNotebook
 
 RECV_BUFFER = 1024
@@ -101,6 +99,7 @@ class NotebookClient():
         """
         Sends a sync message to a remote peer.
         """
+        print("Sending sync message to {}".format(peer))
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
             s.connect(self.peers[peer])
 
