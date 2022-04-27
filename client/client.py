@@ -2,8 +2,6 @@ import pickle
 import socket
 import threading
 
-from numpy import full
-
 from notebook.notebook import DistributedNotebook
 
 RECV_BUFFER = 1024
